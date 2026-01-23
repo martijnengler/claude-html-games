@@ -138,6 +138,8 @@
 
         .game-card:nth-child(1) { --card-index: 1; }
         .game-card:nth-child(2) { --card-index: 2; }
+        .game-card:nth-child(3) { --card-index: 3; }
+        .game-card:nth-child(4) { --card-index: 4; }
 
         .game-card::before {
             content: '';
@@ -258,6 +260,28 @@
             color: var(--accent-orange);
         }
 
+        .game-card:nth-child(3) h2 {
+            background: linear-gradient(90deg, var(--accent-orange) 0%, var(--accent-magenta) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .game-card:nth-child(3) .game-card-footer {
+            color: var(--accent-orange);
+        }
+
+        .game-card:nth-child(4) h2 {
+            background: linear-gradient(90deg, #22c55e 0%, #10b981 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .game-card:nth-child(4) .game-card-footer {
+            color: #22c55e;
+        }
+
         .game-card-footer::after {
             content: '→';
             transition: transform 0.3s ease;
@@ -312,6 +336,26 @@
                         <span class="game-icon">⚽</span>
                         <h2>SOCCER</h2>
                         <p>Interactive soccer game with dynamic mechanics. Score goals and dominate the field.</p>
+                    </div>
+                    <div class="game-card-footer">Play Now</div>
+                </div>
+            </a>
+            <a href="breakout.html" class="game-card">
+                <div class="game-card-inner">
+                    <div>
+                        <span class="game-icon">🧱</span>
+                        <h2>BREAKOUT</h2>
+                        <p>Break all the bricks with precision and speed. Classic arcade action with neon aesthetics.</p>
+                    </div>
+                    <div class="game-card-footer">Play Now</div>
+                </div>
+            </a>
+            <a href="snake.html" class="game-card">
+                <div class="game-card-inner">
+                    <div>
+                        <span class="game-icon">🐍</span>
+                        <h2>SNAKE</h2>
+                        <p>Grow longer, move faster, don't crash. A timeless test of reflexes and strategy.</p>
                     </div>
                     <div class="game-card-footer">Play Now</div>
                 </div>
