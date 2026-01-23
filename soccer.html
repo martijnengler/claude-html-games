@@ -91,14 +91,115 @@
             font-weight: 800;
         }
 
+        .mode-selector {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .mode-modal {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 500px;
+        }
+
+        .mode-modal h2 {
+            font-size: 32px;
+            margin-bottom: 30px;
+            color: #1f2a1f;
+        }
+
+        .mode-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .mode-btn {
+            padding: 16px 32px;
+            font-size: 18px;
+            font-weight: 800;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: "Baloo 2", cursive;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .mode-btn-1p {
+            background: #ff5e57;
+            color: white;
+        }
+
+        .mode-btn-1p:hover {
+            background: #ff4540;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 94, 87, 0.3);
+        }
+
+        .mode-btn-2p {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .mode-btn-2p:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+        }
+
+        .mode-selector.hidden {
+            display: none;
+        }
+
+        .mode-label {
+            display: block;
+            margin-top: 12px;
+            font-size: 14px;
+            color: #666;
+        }
+
         @media (max-width: 600px) {
             body {
                 padding: 16px;
+            }
+
+            .mode-modal {
+                padding: 30px 20px;
+            }
+
+            .mode-buttons {
+                flex-direction: column;
             }
         }
     </style>
 </head>
 <body>
+    <div class="mode-selector" id="modeSelector">
+        <div class="mode-modal">
+            <h2>Choose Game Mode</h2>
+            <div class="mode-buttons">
+                <button class="mode-btn mode-btn-1p" id="mode1p">
+                    1 Player
+                    <span class="mode-label">vs AI</span>
+                </button>
+                <button class="mode-btn mode-btn-2p" id="mode2p">
+                    2 Players
+                    <span class="mode-label">Local Multiplayer</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="game-wrap">
         <h1>Mini 1v1 Soccer</h1>
         <div class="scoreboard">
@@ -109,7 +210,7 @@
             <div class="score-dot" style="background: var(--player-b);"></div>
         </div>
         <canvas id="field" width="900" height="520"></canvas>
-        <div class="help">
+        <div class="help" id="helpText">
             <span>Red:</span> W A S D &nbsp;&nbsp;|&nbsp;&nbsp; <span>Blue:</span> Arrow keys &nbsp;&nbsp;|&nbsp;&nbsp; First to 3 wins
         </div>
     </div>
@@ -119,6 +220,10 @@
         const ctx = canvas.getContext('2d');
         const scoreLeftEl = document.getElementById('scoreLeft');
         const scoreRightEl = document.getElementById('scoreRight');
+        const modeSelector = document.getElementById('modeSelector');
+        const helpText = document.getElementById('helpText');
+
+        let gameMode = null; // '1p' or '2p'
 
         const field = {
             x: 40,
@@ -157,6 +262,21 @@
         const score = { left: 0, right: 0 };
         let gameActive = true;
 
+        // Mode selection
+        document.getElementById('mode1p').addEventListener('click', () => {
+            gameMode = '1p';
+            modeSelector.classList.add('hidden');
+            helpText.innerHTML = '<span>Red:</span> W A S D &nbsp;&nbsp;|&nbsp;&nbsp; <span>Blue:</span> AI (vs CPU) &nbsp;&nbsp;|&nbsp;&nbsp; First to 3 wins';
+            startGame();
+        });
+
+        document.getElementById('mode2p').addEventListener('click', () => {
+            gameMode = '2p';
+            modeSelector.classList.add('hidden');
+            helpText.innerHTML = '<span>Red:</span> W A S D &nbsp;&nbsp;|&nbsp;&nbsp; <span>Blue:</span> Arrow keys &nbsp;&nbsp;|&nbsp;&nbsp; First to 3 wins';
+            startGame();
+        });
+
         function resetPositions() {
             playerLeft.x = field.x + 80;
             playerLeft.y = field.y + field.height / 2;
@@ -172,6 +292,53 @@
             return Math.max(min, Math.min(max, value));
         }
 
+        function handleAI() {
+            if (!gameActive || gameMode !== '1p') return;
+
+            // Predict where the ball will be
+            const predictSteps = 10;
+            let predictedBallX = ball.x + ball.dx * predictSteps;
+            let predictedBallY = ball.y + ball.dy * predictSteps;
+
+            // Clamp predicted position to field bounds
+            predictedBallX = clamp(predictedBallX, field.x + ball.r, field.x + field.width - ball.r);
+            predictedBallY = clamp(predictedBallY, field.y + ball.r, field.y + field.height - ball.r);
+
+            // Aggressive positioning: try to intercept the ball
+            let targetY = predictedBallY;
+            let targetX = ball.x;
+
+            // If ball is moving toward AI, move to intercept it
+            if (ball.dx > 0) {
+                targetX = clamp(ball.x + ball.dx * 15, field.x + 100, field.x + field.width - 100);
+            }
+
+            // Move toward target position
+            const moveThreshold = 15;
+            const distToTargetY = Math.abs(playerRight.y - targetY);
+
+            // More aggressive movement when ball is approaching
+            const speedMultiplier = ball.dx > 0 ? 1.4 : 1;
+
+            if (playerRight.y < targetY - moveThreshold) {
+                playerRight.y += playerRight.speed * speedMultiplier;
+            } else if (playerRight.y > targetY + moveThreshold) {
+                playerRight.y -= playerRight.speed * speedMultiplier;
+            }
+
+            // Move horizontally toward ball when it's in play
+            if (Math.abs(ball.dx) > 0.5 && ball.x > field.x + field.width * 0.4) {
+                if (playerRight.x < targetX - 10) {
+                    playerRight.x += playerRight.speed * 0.6;
+                } else if (playerRight.x > targetX + 10) {
+                    playerRight.x -= playerRight.speed * 0.6;
+                }
+            }
+
+            playerRight.x = clamp(playerRight.x, field.x + playerRight.r, field.x + field.width - playerRight.r);
+            playerRight.y = clamp(playerRight.y, field.y + playerRight.r, field.y + field.height - playerRight.r);
+        }
+
         function handleInput() {
             if (!gameActive) return;
             let leftMoveX = 0;
@@ -183,10 +350,13 @@
 
             let rightMoveX = 0;
             let rightMoveY = 0;
-            if (keys['ArrowUp']) rightMoveY -= 1;
-            if (keys['ArrowDown']) rightMoveY += 1;
-            if (keys['ArrowLeft']) rightMoveX -= 1;
-            if (keys['ArrowRight']) rightMoveX += 1;
+
+            if (gameMode === '2p') {
+                if (keys['ArrowUp']) rightMoveY -= 1;
+                if (keys['ArrowDown']) rightMoveY += 1;
+                if (keys['ArrowLeft']) rightMoveX -= 1;
+                if (keys['ArrowRight']) rightMoveX += 1;
+            }
 
             playerLeft.x += leftMoveX * playerLeft.speed;
             playerLeft.y += leftMoveY * playerLeft.speed;
@@ -358,6 +528,7 @@
 
         function loop() {
             handleInput();
+            handleAI();
             handleCollisions();
             updateBall();
             drawField();
@@ -365,6 +536,16 @@
             drawPlayer(playerRight);
             drawBall();
             requestAnimationFrame(loop);
+        }
+
+        function startGame() {
+            score.left = 0;
+            score.right = 0;
+            scoreLeftEl.textContent = '0';
+            scoreRightEl.textContent = '0';
+            gameActive = true;
+            resetPositions();
+            loop();
         }
 
         document.addEventListener('keydown', (event) => {
@@ -377,9 +558,6 @@
         document.addEventListener('keyup', (event) => {
             keys[event.key] = false;
         });
-
-        resetPositions();
-        loop();
     </script>
 </body>
 </html>
