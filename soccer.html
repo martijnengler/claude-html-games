@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1v1 Mini Soccer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&display=swap');
+
+        :root {
+            --grass-1: #4ddf73;
+            --grass-2: #2fbf62;
+            --sky-1: #ffea8a;
+            --sky-2: #ffb347;
+            --line: #ffffff;
+            --player-a: #ff5e57;
+            --player-b: #3b82f6;
+            --ball: #ffe14d;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background:
+                radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.35), transparent 40%),
+                radial-gradient(circle at 85% 15%, rgba(255, 255, 255, 0.3), transparent 45%),
+                linear-gradient(135deg, var(--sky-1), var(--sky-2));
+            font-family: "Baloo 2", "Trebuchet MS", cursive;
+            color: #1f2a1f;
+            padding: 24px;
+        }
+
+        .game-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            width: min(92vw, 980px);
+        }
+
+        h1 {
+            font-size: clamp(24px, 4vw, 38px);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .scoreboard {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: clamp(16px, 2.6vw, 24px);
+            padding: 6px 16px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.6);
+            box-shadow: 0 6px 0 rgba(0, 0, 0, 0.12);
+        }
+
+        .score-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+        }
+
+        canvas {
+            width: 100%;
+            height: auto;
+            border-radius: 18px;
+            border: 4px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 16px 0 rgba(0, 0, 0, 0.12);
+            background: linear-gradient(135deg, var(--grass-1), var(--grass-2));
+        }
+
+        .help {
+            font-size: clamp(14px, 2.3vw, 18px);
+            text-align: center;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 10px 16px;
+            border-radius: 16px;
+            max-width: 720px;
+        }
+
+        .help span {
+            font-weight: 800;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-wrap">
+        <h1>Mini 1v1 Soccer</h1>
+        <div class="scoreboard">
+            <div class="score-dot" style="background: var(--player-a);"></div>
+            <span id="scoreLeft">0</span>
+            <span>:</span>
+            <span id="scoreRight">0</span>
+            <div class="score-dot" style="background: var(--player-b);"></div>
+        </div>
+        <canvas id="field" width="900" height="520"></canvas>
+        <div class="help">
+            <span>Red:</span> W A S D &nbsp;&nbsp;|&nbsp;&nbsp; <span>Blue:</span> Arrow keys &nbsp;&nbsp;|&nbsp;&nbsp; First to 3 wins
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('field');
+        const ctx = canvas.getContext('2d');
+        const scoreLeftEl = document.getElementById('scoreLeft');
+        const scoreRightEl = document.getElementById('scoreRight');
+
+        const field = {
+            x: 40,
+            y: 40,
+            width: canvas.width - 80,
+            height: canvas.height - 80,
+            goalWidth: 140
+        };
+
+        const playerLeft = {
+            x: field.x + 80,
+            y: field.y + field.height / 2,
+            r: 18,
+            color: getComputedStyle(document.documentElement).getPropertyValue('--player-a').trim(),
+            speed: 4.2
+        };
+
+        const playerRight = {
+            x: field.x + field.width - 80,
+            y: field.y + field.height / 2,
+            r: 18,
+            color: getComputedStyle(document.documentElement).getPropertyValue('--player-b').trim(),
+            speed: 4.2
+        };
+
+        const ball = {
+            x: field.x + field.width / 2,
+            y: field.y + field.height / 2,
+            r: 10,
+            dx: 0,
+            dy: 0,
+            speed: 6.2
+        };
+
+        const keys = {};
+        const score = { left: 0, right: 0 };
+        let gameActive = true;
+
+        function resetPositions() {
+            playerLeft.x = field.x + 80;
+            playerLeft.y = field.y + field.height / 2;
+            playerRight.x = field.x + field.width - 80;
+            playerRight.y = field.y + field.height / 2;
+            ball.x = field.x + field.width / 2;
+            ball.y = field.y + field.height / 2;
+            ball.dx = 0;
+            ball.dy = 0;
+        }
+
+        function clamp(value, min, max) {
+            return Math.max(min, Math.min(max, value));
+        }
+
+        function handleInput() {
+            if (!gameActive) return;
+            let leftMoveX = 0;
+            let leftMoveY = 0;
+            if (keys['w'] || keys['W']) leftMoveY -= 1;
+            if (keys['s'] || keys['S']) leftMoveY += 1;
+            if (keys['a'] || keys['A']) leftMoveX -= 1;
+            if (keys['d'] || keys['D']) leftMoveX += 1;
+
+            let rightMoveX = 0;
+            let rightMoveY = 0;
+            if (keys['ArrowUp']) rightMoveY -= 1;
+            if (keys['ArrowDown']) rightMoveY += 1;
+            if (keys['ArrowLeft']) rightMoveX -= 1;
+            if (keys['ArrowRight']) rightMoveX += 1;
+
+            playerLeft.x += leftMoveX * playerLeft.speed;
+            playerLeft.y += leftMoveY * playerLeft.speed;
+            playerRight.x += rightMoveX * playerRight.speed;
+            playerRight.y += rightMoveY * playerRight.speed;
+
+            playerLeft.x = clamp(playerLeft.x, field.x + playerLeft.r, field.x + field.width - playerLeft.r);
+            playerLeft.y = clamp(playerLeft.y, field.y + playerLeft.r, field.y + field.height - playerLeft.r);
+            playerRight.x = clamp(playerRight.x, field.x + playerRight.r, field.x + field.width - playerRight.r);
+            playerRight.y = clamp(playerRight.y, field.y + playerRight.r, field.y + field.height - playerRight.r);
+
+            const dx = playerRight.x - playerLeft.x;
+            const dy = playerRight.y - playerLeft.y;
+            const distance = Math.hypot(dx, dy) || 1;
+            const minDistance = playerLeft.r + playerRight.r;
+            if (distance < minDistance) {
+                const overlap = (minDistance - distance) / 2;
+                const nx = dx / distance;
+                const ny = dy / distance;
+                playerLeft.x -= nx * overlap;
+                playerLeft.y -= ny * overlap;
+                playerRight.x += nx * overlap;
+                playerRight.y += ny * overlap;
+                playerLeft.x = clamp(playerLeft.x, field.x + playerLeft.r, field.x + field.width - playerLeft.r);
+                playerLeft.y = clamp(playerLeft.y, field.y + playerLeft.r, field.y + field.height - playerLeft.r);
+                playerRight.x = clamp(playerRight.x, field.x + playerRight.r, field.x + field.width - playerRight.r);
+                playerRight.y = clamp(playerRight.y, field.y + playerRight.r, field.y + field.height - playerRight.r);
+            }
+        }
+
+        function kickBall(player) {
+            const dx = ball.x - player.x;
+            const dy = ball.y - player.y;
+            const distance = Math.hypot(dx, dy) || 1;
+            const push = ball.speed;
+            ball.dx = (dx / distance) * push;
+            ball.dy = (dy / distance) * push;
+            ball.x = player.x + (dx / distance) * (player.r + ball.r + 0.5);
+            ball.y = player.y + (dy / distance) * (player.r + ball.r + 0.5);
+        }
+
+        function updateBall() {
+            if (!gameActive) return;
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+            ball.dx *= 0.985;
+            ball.dy *= 0.985;
+
+            if (ball.y - ball.r <= field.y || ball.y + ball.r >= field.y + field.height) {
+                ball.dy *= -1;
+                ball.y = clamp(ball.y, field.y + ball.r, field.y + field.height - ball.r);
+            }
+
+            const leftGoalTop = field.y + (field.height - field.goalWidth) / 2;
+            const leftGoalBottom = leftGoalTop + field.goalWidth;
+            const inGoal = ball.y > leftGoalTop && ball.y < leftGoalBottom;
+
+            if (ball.x - ball.r <= field.x && inGoal) {
+                score.right += 1;
+                scoreRightEl.textContent = score.right;
+                if (score.right >= 3) {
+                    gameActive = false;
+                } else {
+                    resetPositions();
+                }
+            }
+
+            if (ball.x + ball.r >= field.x + field.width && inGoal) {
+                score.left += 1;
+                scoreLeftEl.textContent = score.left;
+                if (score.left >= 3) {
+                    gameActive = false;
+                } else {
+                    resetPositions();
+                }
+            }
+
+            if (!inGoal && (ball.x - ball.r <= field.x || ball.x + ball.r >= field.x + field.width)) {
+                ball.dx *= -0.9;
+                ball.x = clamp(ball.x, field.x + ball.r, field.x + field.width - ball.r);
+            }
+        }
+
+        function handleCollisions() {
+            if (!gameActive) return;
+            const leftDist = Math.hypot(ball.x - playerLeft.x, ball.y - playerLeft.y);
+            if (leftDist < playerLeft.r + ball.r) {
+                kickBall(playerLeft);
+            }
+
+            const rightDist = Math.hypot(ball.x - playerRight.x, ball.y - playerRight.y);
+            if (rightDist < playerRight.r + ball.r) {
+                kickBall(playerRight);
+            }
+        }
+
+        function drawField() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            for (let i = 0; i < field.width; i += 40) {
+                ctx.fillRect(field.x + i, field.y, 20, field.height);
+            }
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(field.x, field.y, field.width, field.height);
+
+            ctx.beginPath();
+            ctx.moveTo(field.x + field.width / 2, field.y);
+            ctx.lineTo(field.x + field.width / 2, field.y + field.height);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(field.x + field.width / 2, field.y + field.height / 2, 50, 0, Math.PI * 2);
+            ctx.stroke();
+
+            const goalTop = field.y + (field.height - field.goalWidth) / 2;
+            const goalBottom = goalTop + field.goalWidth;
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.moveTo(field.x, goalTop);
+            ctx.lineTo(field.x, goalBottom);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(field.x + field.width, goalTop);
+            ctx.lineTo(field.x + field.width, goalBottom);
+            ctx.stroke();
+
+            if (!gameActive) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+                ctx.fillRect(field.x, field.y, field.width, field.height);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                ctx.font = 'bold 44px \"Baloo 2\", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const winner = score.left >= 3 ? 'Red wins!' : 'Blue wins!';
+                ctx.fillText(winner, field.x + field.width / 2, field.y + field.height / 2);
+            }
+        }
+
+        function drawPlayer(player) {
+            ctx.fillStyle = player.color;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.beginPath();
+            ctx.arc(player.x - 6, player.y - 6, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawBall() {
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--ball').trim();
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.r - 2, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function loop() {
+            handleInput();
+            handleCollisions();
+            updateBall();
+            drawField();
+            drawPlayer(playerLeft);
+            drawPlayer(playerRight);
+            drawBall();
+            requestAnimationFrame(loop);
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+                event.preventDefault();
+            }
+            keys[event.key] = true;
+        });
+
+        document.addEventListener('keyup', (event) => {
+            keys[event.key] = false;
+        });
+
+        resetPositions();
+        loop();
+    </script>
+</body>
+</html>
