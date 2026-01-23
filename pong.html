@@ -117,23 +117,127 @@
         #gameCanvas {
             position: relative;
         }
+
+        .mode-selector {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .mode-modal {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            padding: 50px;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            max-width: 500px;
+            border: 3px solid white;
+        }
+
+        .mode-modal h2 {
+            font-size: 32px;
+            margin-bottom: 30px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .mode-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .mode-btn {
+            padding: 16px 32px;
+            font-size: 18px;
+            font-weight: bold;
+            border: 2px solid white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .mode-btn-ai {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .mode-btn-ai:hover {
+            background: #ff5252;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 107, 107, 0.4);
+        }
+
+        .mode-btn-2p {
+            background: #4ecdc4;
+            color: white;
+        }
+
+        .mode-btn-2p:hover {
+            background: #44b3aa;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(78, 205, 196, 0.4);
+        }
+
+        .mode-selector.hidden {
+            display: none;
+        }
+
+        .mode-label {
+            display: block;
+            margin-top: 10px;
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        @media (max-width: 600px) {
+            .mode-modal {
+                padding: 30px 20px;
+            }
+
+            .mode-buttons {
+                flex-direction: column;
+            }
+        }
     </style>
 </head>
 <body>
+    <div class="mode-selector" id="modeSelector">
+        <div class="mode-modal">
+            <h2>Choose Game Mode</h2>
+            <div class="mode-buttons">
+                <button class="mode-btn mode-btn-ai" id="modeAI">
+                    vs AI
+                    <span class="mode-label">1 Player</span>
+                </button>
+                <button class="mode-btn mode-btn-2p" id="mode2P">
+                    2 Players
+                    <span class="mode-label">Local Multiplayer</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="gameContainer">
         <h1>🎮 PONG 🎮</h1>
         <canvas id="gameCanvas" width="800" height="400"></canvas>
         <div id="score">
             <span id="playerScore">0</span> - <span id="aiScore">0</span>
         </div>
-        <div class="difficulty-selector">
+        <div class="difficulty-selector" id="difficultySelector">
             <strong>Difficulty:</strong>
             <label><input type="radio" name="difficulty" value="easy"> Easy</label>
             <label><input type="radio" name="difficulty" value="medium" checked> Medium</label>
             <label><input type="radio" name="difficulty" value="hard"> Hard</label>
         </div>
         <div id="instructions">
-            <p>Use <strong>UP/DOWN</strong> arrows or <strong>W/S</strong> keys to move your paddle (left side)</p>
+            <p id="instructionsMain">Use <strong>UP/DOWN</strong> arrows or <strong>W/S</strong> keys to move your paddle (left side)</p>
             <p>Press <strong>SPACE</strong> to pause/resume | First to 11 points wins!</p>
             <p id="gameStatus">Game Started!</p>
         </div>
@@ -192,6 +296,7 @@
         let soundEnabled = true;
         let audioContext = null;
         let aiReactionZone = 35;
+        let gameMode = null; // 'ai' or '2p'
 
         // Audio initialization and sound functions
         function initAudio() {
@@ -244,6 +349,25 @@
             aiReactionZone = preset.reactionZone;
         }
 
+        // Mode selection
+        document.getElementById('modeAI').addEventListener('click', () => {
+            gameMode = 'ai';
+            document.getElementById('modeSelector').classList.add('hidden');
+            document.getElementById('difficultySelector').style.display = 'block';
+            document.getElementById('instructionsMain').innerHTML = 'Use <strong>W/S</strong> or <strong>UP/DOWN</strong> arrows to move your paddle (left side)';
+            startGame();
+        });
+
+        document.getElementById('mode2P').addEventListener('click', () => {
+            gameMode = '2p';
+            document.getElementById('modeSelector').classList.add('hidden');
+            document.getElementById('difficultySelector').style.display = 'none';
+            document.getElementById('instructionsMain').innerHTML = 'Left: <strong>W/S</strong> &nbsp;|&nbsp; Right: <strong>UP/DOWN</strong> arrows';
+            // Set both paddles to same speed for 2-player fairness
+            ai.speed = player.speed;
+            startGame();
+        });
+
         // Event listeners
         document.addEventListener('keydown', (e) => {
             keys[e.key] = true;
@@ -284,6 +408,17 @@
         function updatePauseButton() {
             const btn = document.getElementById('pauseBtn');
             btn.textContent = isPaused ? 'Resume' : 'Pause';
+        }
+
+        function startGame() {
+            player.score = 0;
+            ai.score = 0;
+            isPaused = false;
+            updatePauseButton();
+            resetBall();
+            gameActive = true;
+            updateScore();
+            document.getElementById('gameStatus').textContent = 'Game Started!';
         }
 
         function resetGame() {
@@ -332,22 +467,33 @@
                 // Allow paddle movement during countdown
             }
 
-            // Player movement - check both arrow keys and W/S keys
-            if ((keys['ArrowUp'] || keys['w'] || keys['W']) && player.y > 0) {
+            // Player movement (left side) - W/S or Arrow Up/Down
+            if ((keys['w'] || keys['W']) && player.y > 0) {
                 player.y -= player.speed;
             }
-            if ((keys['ArrowDown'] || keys['s'] || keys['S']) && player.y < canvas.height - player.height) {
+            if ((keys['s'] || keys['S']) && player.y < canvas.height - player.height) {
                 player.y += player.speed;
             }
 
-            // AI movement - track the ball
-            const aiCenter = ai.y + ai.height / 2;
-            const ballCenter = ball.y;
+            // Right paddle movement - depends on game mode
+            if (gameMode === '2p') {
+                // 2-player mode: right paddle controlled by arrow keys
+                if (keys['ArrowUp'] && ai.y > 0) {
+                    ai.y -= ai.speed;
+                }
+                if (keys['ArrowDown'] && ai.y < canvas.height - ai.height) {
+                    ai.y += ai.speed;
+                }
+            } else if (gameMode === 'ai') {
+                // AI mode: right paddle is AI-controlled
+                const aiCenter = ai.y + ai.height / 2;
+                const ballCenter = ball.y;
 
-            if (ballCenter < aiCenter - aiReactionZone && ai.y > 0) {
-                ai.y -= ai.speed;
-            } else if (ballCenter > aiCenter + aiReactionZone && ai.y < canvas.height - ai.height) {
-                ai.y += ai.speed;
+                if (ballCenter < aiCenter - aiReactionZone && ai.y > 0) {
+                    ai.y -= ai.speed;
+                } else if (ballCenter > aiCenter + aiReactionZone && ai.y < canvas.height - ai.height) {
+                    ai.y += ai.speed;
+                }
             }
 
             // Ball movement (only if countdown is not active)
@@ -402,7 +548,8 @@
                 resetBall();
                 if (ai.score >= 11) {
                     gameActive = false;
-                    document.getElementById('gameStatus').textContent = 'AI Won! Try again!';
+                    const winMessage = gameMode === 'ai' ? 'AI Won! Try again!' : 'Magenta Wins!';
+                    document.getElementById('gameStatus').textContent = winMessage;
                     playSoundSequence([660, 550, 440], 0.15);
                 }
             }
@@ -414,7 +561,8 @@
                 resetBall();
                 if (player.score >= 11) {
                     gameActive = false;
-                    document.getElementById('gameStatus').textContent = '🎉 You Won! 🎉';
+                    const winMessage = gameMode === 'ai' ? '🎉 You Won! 🎉' : 'Green Wins!';
+                    document.getElementById('gameStatus').textContent = winMessage;
                     playSoundSequence([440, 550, 660], 0.15);
                 }
             }
@@ -500,10 +648,10 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // Start the game
-        setDifficulty('medium');
+        // Initialize (wait for mode selection)
         updateScore();
         updatePauseButton();
+        setDifficulty('medium');
         gameLoop();
     </script>
 </body>
