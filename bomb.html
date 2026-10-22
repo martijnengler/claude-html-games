@@ -93,6 +93,66 @@
             border-color: #ff3333;
         }
 
+        .input-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            flex: 1;
+        }
+
+        .input-group label {
+            display: block;
+            color: #999;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            font-size: 20px;
+            text-align: center;
+            border: 2px solid #444;
+            border-radius: 8px;
+            background: #222;
+            color: white;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #ff3333;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .checkbox-container input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .checkbox-container label {
+            color: #999;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .countdown {
+            font-size: 48px;
+            font-weight: bold;
+            color: #ff3333;
+            margin: 20px 0;
+        }
+
         button {
             width: 100%;
             padding: 20px;
@@ -148,9 +208,23 @@
         
         <div class="bomb-emoji" id="emoji">💣</div>
 
+        <div class="countdown hidden" id="countdown">--</div>
+
         <div class="timer-input" id="inputSection">
-            <label for="seconds">Timer (seconds):</label>
-            <input type="number" id="seconds" min="1" max="600" value="60">
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="minSeconds">Min (seconds):</label>
+                    <input type="number" id="minSeconds" min="1" max="600" value="30">
+                </div>
+                <div class="input-group">
+                    <label for="maxSeconds">Max (seconds):</label>
+                    <input type="number" id="maxSeconds" min="1" max="600" value="90">
+                </div>
+            </div>
+            <div class="checkbox-container">
+                <input type="checkbox" id="showTimer">
+                <label for="showTimer">Show Timer</label>
+            </div>
         </div>
 
         <button class="start-btn" id="startBtn">Arm Bomb</button>
@@ -161,7 +235,10 @@
     <script>
         const statusEl = document.getElementById('status');
         const emojiEl = document.getElementById('emoji');
-        const secondsInput = document.getElementById('seconds');
+        const countdownEl = document.getElementById('countdown');
+        const minSecondsInput = document.getElementById('minSeconds');
+        const maxSecondsInput = document.getElementById('maxSeconds');
+        const showTimerCheckbox = document.getElementById('showTimer');
         const inputSection = document.getElementById('inputSection');
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
@@ -171,6 +248,7 @@
         let endTime = null;
         let tickAudio = null;
         let explosionAudio = null;
+        let showTimer = false;
 
         // Create audio contexts
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -239,15 +317,26 @@
         }
 
         function startBomb() {
-            const seconds = parseInt(secondsInput.value);
-            if (seconds < 1) return;
+            const minSeconds = parseInt(minSecondsInput.value);
+            const maxSeconds = parseInt(maxSecondsInput.value);
+            
+            if (minSeconds < 1 || maxSeconds < 1) return;
+            if (minSeconds > maxSeconds) {
+                alert('Minimum time cannot be greater than maximum time');
+                return;
+            }
 
             // Resume audio context on user interaction
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
 
-            endTime = Date.now() + (seconds * 1000);
+            // Choose random time between min and max (inclusive)
+            const randomSeconds = Math.floor(Math.random() * (maxSeconds - minSeconds + 1)) + minSeconds;
+            endTime = Date.now() + (randomSeconds * 1000);
+            
+            // Get show timer preference
+            showTimer = showTimerCheckbox.checked;
             
             statusEl.textContent = 'Armed';
             statusEl.className = 'status armed';
@@ -256,6 +345,10 @@
             inputSection.classList.add('hidden');
             startBtn.classList.add('hidden');
             stopBtn.classList.remove('hidden');
+            
+            if (showTimer) {
+                countdownEl.classList.remove('hidden');
+            }
             
             tick();
         }
@@ -266,6 +359,12 @@
             if (remaining <= 0) {
                 explode();
                 return;
+            }
+            
+            // Update countdown display if timer is shown
+            if (showTimer) {
+                const seconds = Math.ceil(remaining / 1000);
+                countdownEl.textContent = seconds;
             }
             
             createTickSound();
@@ -294,6 +393,7 @@
             statusEl.className = 'status idle';
             emojiEl.textContent = '💣';
             
+            countdownEl.classList.add('hidden');
             inputSection.classList.remove('hidden');
             startBtn.classList.remove('hidden');
             stopBtn.classList.add('hidden');
@@ -307,6 +407,7 @@
             statusEl.className = 'status idle';
             emojiEl.textContent = '💣';
             
+            countdownEl.classList.add('hidden');
             inputSection.classList.remove('hidden');
             startBtn.classList.remove('hidden');
             resetBtn.classList.add('hidden');
@@ -317,7 +418,13 @@
         resetBtn.addEventListener('click', reset);
 
         // Allow Enter key to start
-        secondsInput.addEventListener('keypress', (e) => {
+        minSecondsInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                startBomb();
+            }
+        });
+        
+        maxSecondsInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 startBomb();
             }
